@@ -4,6 +4,8 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
+
+const char* R_Mensajes ="";
 //---------------------------------------------------------------------
 const char* ssid = "Canek_server";
 const char* password = "123456789";
@@ -86,8 +88,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         </div>
 
         <div class="card">
-          <button id="encender" onclick="encender_motor()">Encender</button>
-          <p class="state">state: <span id="state">%STATE%</span></p>
+          <button id="encender" onclick="encender_motor()">Encender riego manual</button>
+          <p class="state">State: <span id="state">%STATE%</span></p>
+        </div>
+        
+        <div class="card">
+          <p class="state">Mensaje recibido: <span id="Mensaje"></span></p>
         </div>
 
       </div>
@@ -115,7 +121,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         }
 
         function onMessage(event) {
-          document.getElementById('state').innerHTML = event.data;
+          document.getElementById('Mensaje').innerHTML = event.data;
         }
         function onLoad(event) {
           initWebSocket();
@@ -123,7 +129,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         function encender_motor(){
     
-          websocket.send("hey ya me conecte");
+          websocket.send("Enciende");
         }
 
         function Send_lora(){
@@ -187,18 +193,27 @@ const char index_html[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 //************************************************************************************************
+
+// Envia un mensaje
 void notifyClients() {
   ws.textAll(String("hhhh"));
 }
+
+
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
       Serial.println((char*)data);
-      notifyClients();
+      if (strcmp((char*)data, "Enciende") == 0)
+      {
+        ledState = !ledState;
+        notifyClients();
+      }
   }
 }
+
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
              void *arg, uint8_t *data, size_t len) {
@@ -218,14 +233,23 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   }
 }
 
+
 void initWebSocket() {
   ws.onEvent(onEvent);
   server.addHandler(&ws);
 }
 
+
 String processor(const String& var){
   Serial.println(var);
-return "hey";
+
+  if(ledState){
+    return "ON";
+  }
+  else{
+    return "OFF";
+  }
+
 }
 
 void setup(){
