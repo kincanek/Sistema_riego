@@ -15,7 +15,6 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 //**************************************************************************************************
 const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
-<!DOCTYPE html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -132,21 +131,16 @@ const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
           var i;
           var text = "";
           var valuee;
+          
+          document.write(data_read.rows[1].cells[1].innerText);
+          
 
-          if(total_filas > 0){
-            for(i=1;i<=total_filas;i++){
-              valuee=data_read.rows[0].cells[i].innerText;
-            }
-            document.write(data_read.cells[0].innerText);
-          }
-          else{
-            document.write("Inserte valores para enviar");
-          }
         }
 
         function Registrar(){
           var dia_semana = document.getElementById("week").value;
           var hora_pro = document.getElementById("hora").value;
+          var i = 1;
           if(dia_semana==0){
             dia_semana = "Domingo";
           }
@@ -169,8 +163,9 @@ const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
             dia_semana = "Sabado";
           }
 
-          $("#mytable").append('<tr><td>' + dia_semana +  '</td>' + '<td>' + hora_pro + "<td>"+ "<button type='button' onclick='productDelete(this);' class='btn btn-default'>" +"<span class='glyphicon glyphicon-remove' />" +"</button>" + "</td>" +"</tr>");
- 
+          $("#mytable").append('<tr id="row' + i + '"><td>' + dia_semana +  '</td>' + '<td>' + hora_pro + "<td>"+ "<button type='button' onclick='productDelete(this);' class='btn btn-default'>" +"<span class='glyphicon glyphicon-remove' />" +"</button>" + "</td>" +"</tr>");
+          
+          i++;
         }
 
         function productDelete(ctl) {
