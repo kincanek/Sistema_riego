@@ -29,10 +29,13 @@ const char index_html[] PROGMEM = R"rawliteral(
       integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr"
       crossorigin="anonymous">
     <link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
       rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+
     <style>
         html {font-family: Arial; display: inline-block; text-align: center;}
         p { font-size: 1.2rem;}
@@ -41,18 +44,20 @@ const char index_html[] PROGMEM = R"rawliteral(
         .content { padding: 20px; }
         .card { background-color: rgb(236, 217, 217) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
         .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    
         input,
           label{
             margin: .4rem 0;
     </style>
+
   </head>
   <body>
     <div class="topnav">
       <h1>Sistema de control y monitoreo</h1>
     </div>
+
     <div class="content">
       <div class="cards">
+
         <div class="card">
           <p><i class="fas fa-tint" style="color:#00add6;"></i> PROGRAMAR RIEGO </p>
         
@@ -65,9 +70,13 @@ const char index_html[] PROGMEM = R"rawliteral(
               <option value="5">Viernes</option>
               <option value="6">Sabado</option>
             </select>
+
           <input id="hora" name="appt" min="09:00" max="18:00" required="" type="time">
+
           <button id="adicionar" onclick="Registrar()">Agregar</button>
+
           <div class="card">
+
             <p> Registro de alarmas </p>
             <table id="mytable" class="table table-bordered table-hover " style="width: 347px; height: 38px;">
               <tbody>
@@ -81,27 +90,39 @@ const char index_html[] PROGMEM = R"rawliteral(
             <button id="enviar" onclick="Send_lora()">Enviar</button>
           </div>
         </div>
+
         <div class="card">
           <button id="encender" onclick="encender_motor()">Encender riego manual</button>
           <p class="state">State: <span id="state">%STATE%</span></p>
         </div>
         
         <div class="card">
-          <p class="state">Mensaje recibido: <span id="Mensaje"></span></p>
+          <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
+          <div id="table_div"></div>
         </div>
+
+        <div class="card">
+          <div id="Grafica"></div>
+        </div>
+
       </div>
      
-    <script>
+
+    <script type="text/javascript">
+
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
       window.addEventListener('load', onLoad);
+      google.charts.load('current', {'packages':['table','corechart']});
+      var data_ms;
+   
 
         function initWebSocket() {
           console.log('Trying to open a WebSocket connection...');
           websocket = new WebSocket(gateway);
           websocket.onopen    = onOpen;
           websocket.onclose   = onClose;
-          websocket.onmessage = onMessage; // <-- add this line
+          websocket.onmessage = onMessage; 
         }
         function onOpen(event) {
           console.log('Connection opened');
@@ -110,22 +131,30 @@ const char index_html[] PROGMEM = R"rawliteral(
           console.log('Connection closed');
           setTimeout(initWebSocket, 2000);
         }
+
         function onMessage(event) {
-          document.getElementById('Mensaje').innerHTML = event.data;
+          data_ms = event.data;
+
+          document.getElementById("state").innerHTML = data_ms;
         }
+
         function onLoad(event) {
           initWebSocket();
         }
+
         function encender_motor(){
     
           websocket.send("Enciende");
+        
         }
+
         function Send_lora(){
           var data_read = document.getElementById("mytable");
           var total_filas = data_read.rows.length;
           var i;
           var day=[];
           var time_ = [];
+
           if(total_filas != 0){
             for (i=1; i<total_filas;i++){
               day.push(data_read.rows[i].cells[0].innerText);
@@ -135,9 +164,47 @@ const char index_html[] PROGMEM = R"rawliteral(
             websocket.send(time_);
             
           }
-          
-          
+
         }
+
+        function vew_data(){
+          google.charts.setOnLoadCallback(drawDateFormatTable);
+        }
+
+        function drawDateFormatTable(){
+          var data = new google.visualization.DataTable();
+          data.addColumn('date','Fecha inicio');
+          data.addColumn('number','Litros');
+          data.addRows([
+            [new Date(2020,0,27,7,15,0),20],
+            [new Date(2020,0,28,8,31,0),25],
+            [new Date(2020,0,29,8,0,0),30]
+          ]);
+          var formatter_long = new google.visualization.DateFormat({formatType: 'long'});
+          formatter_long.format(data, 0);
+          var options = {
+            title: 'GRAFICA',
+            width: 900,
+            height: 500,
+            hAxis: {
+              format: 'M/d/yy,hh:mm',
+              gridlines: {count: 15}
+            },
+            vAxis: {
+              gridlines: {color: 'none'},
+              minValue: 0
+            }
+          };
+          var table = new google.visualization.Table(document.getElementById('table_div'));
+          table.draw(data, {showRowNumber: true, width: '100%', height: '100%'});
+
+          var chart = new google.visualization.LineChart(document.getElementById('Grafica'));
+
+          chart.draw(data,options);
+
+
+        }
+
         function Registrar(){
           var dia_semana = document.getElementById("week").value;
           var hora_pro = document.getElementById("hora").value;
@@ -163,10 +230,12 @@ const char index_html[] PROGMEM = R"rawliteral(
           else{
             dia_semana = "Sabado";
           }
+
           $("#mytable").append('<tr id="row' + i + '"><td>' + dia_semana +  '</td>' + '<td>' + hora_pro + "<td>"+ "<button type='button' onclick='productDelete(this);' class='btn btn-default'>" +"<span class='glyphicon glyphicon-remove' />" +"</button>" + "</td>" +"</tr>");
           
           i++;
         }
+
         function productDelete(ctl) {
           $(ctl).parents("tr").remove();
         }
@@ -177,10 +246,6 @@ const char index_html[] PROGMEM = R"rawliteral(
 )rawliteral";
 //************************************************************************************************
 
-// Envia un mensaje
-void notifyClients() {
-  ws.textAll(String("hhhh"));
-}
 
 void readFile(){
   myFile = SD.open("/data.txt","r");
@@ -203,10 +268,18 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
       Serial.println((char*)data);
+      
       if (strcmp((char*)data, "Enciende") == 0)
       {
         ledState = !ledState;
-        readFile();
+        
+        if(ledState){
+          ws.textAll("ON");
+         }
+         else{
+          ws.textAll("OFF");
+          }
+        
       }
   }
 }
