@@ -3,9 +3,13 @@
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include "FS.h"
+#include "SD.h"
+#include <SPI.h>
 
+File myFile;
 
-const char* R_Mensajes ="";
+SPIClass spi = SPIClass(HSPI);
 //---------------------------------------------------------------------
 const char* ssid = "Canek_server";
 const char* password = "123456789";
@@ -199,7 +203,21 @@ void notifyClients() {
   ws.textAll(String("hhhh"));
 }
 
-
+void readFile(){
+  myFile = SD.open("/data.txt","r");
+  if(myFile){
+    Serial.println("Data: ");
+    String inString;
+    while(myFile.available()){
+      inString += myFile.readString();
+    }
+    myFile.close();
+    Serial.println(inString);
+    ws.textAll(inString);
+  }else{
+    Serial.println("No open data");
+  }
+}
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
@@ -209,7 +227,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       if (strcmp((char*)data, "Enciende") == 0)
       {
         ledState = !ledState;
-        notifyClients();
+        readFile();
       }
   }
 }
@@ -255,19 +273,32 @@ String processor(const String& var){
 void setup(){
   // Serial port for debugging purposes
   Serial.begin(115200);
-
+  SPI.begin(14,2,15,13);
+  if (!SD.begin())
+  {
+    Serial.println("initialization failed!");
+    return;
+  }
+  else{
+    Serial.println("SD montada");
+  }
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
  
-   WiFi.softAP(ssid, password);
- 
-  initWebSocket();
+  WiFi.softAP(ssid, password);
+  IPAddress Ip(192, 168, 1, 1);
+  IPAddress NMask(255, 255, 255, 0);
+  WiFi.softAPConfig(Ip, Ip, NMask);
 
+  initWebSocket();
+  
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
   });
 
   server.begin();
+  
+ 
 }
 
 void loop() {
