@@ -14,7 +14,8 @@ const int ledPin = 25;
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 //**************************************************************************************************
-const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -129,10 +130,19 @@ const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
           var data_read = document.getElementById("mytable");
           var total_filas = data_read.rows.length;
           var i;
-          var text = "";
-          var valuee;
+          var day=[];
+          var time_ = [];
+
+          if(total_filas != 0){
+            for (i=1; i<total_filas;i++){
+              day.push(data_read.rows[i].cells[0].innerText);
+              time_.push(data_read.rows[i].cells[1].innerText);
+            }
+            websocket.send(day);
+            websocket.send(time_);
+            
+          }
           
-          document.write(data_read.rows[1].cells[1].innerText);
           
 
         }
@@ -174,7 +184,8 @@ const char index_html[] PROGMEM = R"rawliteral(<!DOCTYPE html>
     </script>
     </div>
   </body>
-</html>)rawliteral";
+</html>
+)rawliteral";
 //************************************************************************************************
 void notifyClients() {
   ws.textAll(String("hhhh"));
