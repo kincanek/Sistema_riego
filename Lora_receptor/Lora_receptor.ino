@@ -1,15 +1,13 @@
-
 // Import required libraries
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
-#include "FS.h"
 #include "SD.h"
 #include <SPI.h>
 
 File myFile;
 
-SPIClass spi = SPIClass(HSPI);
+
 //---------------------------------------------------------------------
 const char* ssid = "Canek_server";
 const char* password = "123456789";
@@ -24,7 +22,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <meta http-equiv="content-type" content="text/html; charset=windows-1252">
     <title>ESP Web Server</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
@@ -34,8 +32,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
       rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
-
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         html {font-family: Arial; display: inline-block; text-align: center;}
         p { font-size: 1.2rem;}
@@ -49,16 +46,13 @@ const char index_html[] PROGMEM = R"rawliteral(
           label{
             margin: .4rem 0;
     </style>
-
   </head>
   <body>
     <div class="topnav">
       <h1>Sistema de control y monitoreo</h1>
     </div>
-
     <div class="content">
       <div class="cards">
-
         <div class="card">
           <p><i class="fas fa-tint" style="color:#00add6;"></i> PROGRAMAR RIEGO </p>
         
@@ -71,11 +65,8 @@ const char index_html[] PROGMEM = R"rawliteral(
               <option value="5">Viernes</option>
               <option value="6">Sabado</option>
             </select>
-
           <input id="hora" name="appt" min="09:00" max="18:00" required="" type="time">
-
           <button id="adicionar" onclick="Registrar()">Agregar</button>
-
           <div class="card">
             <p> Registro de alarmas </p>
             <table id="mytable" class="table table-bordered table-hover " style="width: 347px; height: 38px;">
@@ -90,7 +81,6 @@ const char index_html[] PROGMEM = R"rawliteral(
             <button id="enviar" onclick="Send_lora()">Enviar</button>
           </div>
         </div>
-
         <div class="card">
           <button id="encender" onclick="encender_motor()">Encender riego manual</button>
           <p class="state">State: <span id="state">%STATE%</span></p>
@@ -99,12 +89,9 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div class="card">
           <p class="state">Mensaje recibido: <span id="Mensaje"></span></p>
         </div>
-
       </div>
      
-
     <script>
-
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
       window.addEventListener('load', onLoad);
@@ -123,26 +110,22 @@ const char index_html[] PROGMEM = R"rawliteral(
           console.log('Connection closed');
           setTimeout(initWebSocket, 2000);
         }
-
         function onMessage(event) {
           document.getElementById('Mensaje').innerHTML = event.data;
         }
         function onLoad(event) {
           initWebSocket();
         }
-
         function encender_motor(){
     
           websocket.send("Enciende");
         }
-
         function Send_lora(){
           var data_read = document.getElementById("mytable");
           var total_filas = data_read.rows.length;
           var i;
           var day=[];
           var time_ = [];
-
           if(total_filas != 0){
             for (i=1; i<total_filas;i++){
               day.push(data_read.rows[i].cells[0].innerText);
@@ -154,9 +137,7 @@ const char index_html[] PROGMEM = R"rawliteral(
           }
           
           
-
         }
-
         function Registrar(){
           var dia_semana = document.getElementById("week").value;
           var hora_pro = document.getElementById("hora").value;
@@ -182,12 +163,10 @@ const char index_html[] PROGMEM = R"rawliteral(
           else{
             dia_semana = "Sabado";
           }
-
           $("#mytable").append('<tr id="row' + i + '"><td>' + dia_semana +  '</td>' + '<td>' + hora_pro + "<td>"+ "<button type='button' onclick='productDelete(this);' class='btn btn-default'>" +"<span class='glyphicon glyphicon-remove' />" +"</button>" + "</td>" +"</tr>");
           
           i++;
         }
-
         function productDelete(ctl) {
           $(ctl).parents("tr").remove();
         }
@@ -286,9 +265,6 @@ void setup(){
   digitalWrite(ledPin, LOW);
  
   WiFi.softAP(ssid, password);
-  IPAddress Ip(192, 168, 1, 1);
-  IPAddress NMask(255, 255, 255, 0);
-  WiFi.softAPConfig(Ip, Ip, NMask);
 
   initWebSocket();
   
@@ -298,7 +274,6 @@ void setup(){
 
   server.begin();
   
- 
 }
 
 void loop() {

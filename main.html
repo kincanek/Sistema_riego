@@ -75,7 +75,7 @@
         </div>
         
         <div class="card">
-          <p class="state">Mensaje recibido: <span id="Mensaje"></span></p>
+          <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
           <div id="table_div"></div>
         </div>
         <div class="card">
@@ -90,7 +90,7 @@
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
       google.charts.load('current', {'packages':['table','corechart']});
-      google.charts.setOnLoadCallback(drawDateFormatTable);
+      
 
       window.addEventListener('load', onLoad);
 
@@ -138,10 +138,13 @@
             websocket.send(time_);
             
           }
-          
-          
 
         }
+
+        function vew_data(){
+          google.charts.setOnLoadCallback(drawDateFormatTable);
+        }
+
         function drawDateFormatTable(){
           var data = new google.visualization.DataTable();
           data.addColumn('date','Fecha inicio');
