@@ -30,6 +30,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       crossorigin="anonymous">
     <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href= "smartphone.css" media="screen and (max-device-width: 480px)" />
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
       rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
@@ -192,14 +193,46 @@ const char index_html[] PROGMEM = R"rawliteral(
           var i;
           var len_data = (data_split.length-1)/3;
           if(data_split.length != 1){
-               
+            var fecha;
+            var hora;
             var data_base = new google.visualization.DataTable();
             data_base.addColumn('date','Fecha inicio');
-            data_base.addColumn('string','Litros');
+            data_base.addColumn('number','Litros');
             data_base.addRows(len_data);
-          
+            var j = 0;
+            for(i=0;i<len_data;i++)
+            {
+              
+             fecha = data_split[j].split("/")
+             hora = data_split[1+j].split(":")
+             data_base.setCell(i, 0, new Date(fecha[0],fecha[1],fecha[2],hora[0],hora[1],0));
+             data_base.setCell(i, 1,parseFloat(data_split[2+j]));
+             j = j + 3;
+            }
+           
+            
+            var formatter_long = new google.visualization.DateFormat({formatType: 'long'});
+            formatter_long.format(data_base, 0);
             var table = new google.visualization.Table(document.getElementById('table_div'));
-            table.draw(data_base, {showRowNumber: true, width: '100%', height: '100%'});
+            table.draw(data_base, {showRowNumber: true, width: 'auto', height: 'auto'});
+           
+            var options = {
+            title: 'GRAFICA',
+            width: 800,
+            height: 400,
+            hAxis: {
+              format: 'M/d/yy,hh:mm',
+              gridlines: {count: 15}
+            },
+            vAxis: {
+              gridlines: {color: 'none'},
+              minValue: 0
+            }
+          };
+          
+          var chart = new google.visualization.LineChart(document.getElementById('Grafica'));
+          chart.draw(data_base,options);
+          
           }
 
          
