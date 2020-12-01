@@ -117,6 +117,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       var websocket;
       google.charts.load('current', {'packages':['table','corechart']});
       var data_ms;
+      var data_split;
       
 
       window.addEventListener('load', onLoad);
@@ -138,13 +139,9 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         function onMessage(event) {
           data_ms = event.data;
-          data_split = data_ms.split(" ");
-          if(data_split == "ON" || data_split== "OF"){
-            document.getElementById("state").innerHTML = data_ms;
-          }
-          
 
         }
+
         function onLoad(event) {
           initWebSocket();
         }
@@ -152,7 +149,14 @@ const char index_html[] PROGMEM = R"rawliteral(
         function encender_motor(){
     
           websocket.send("Enciende");
+          var myVar = setInterval(myTimer2,3000);
         
+        }
+        function myTimer2(){
+          
+        if(data_ms == "ON" || data_ms == "OFF" ){
+          document.getElementById("state").innerHTML = data_ms;
+        }
         }
 
         function Send_lora(){
@@ -175,41 +179,30 @@ const char index_html[] PROGMEM = R"rawliteral(
         }
 
         function vew_data(){
+          websocket.send("Leer");
+          var myVar = setInterval(myTimer,3000);
+        }
+        
+        function myTimer(){
           google.charts.setOnLoadCallback(drawDateFormatTable);
         }
+        
+        function drawDateFormatTable(event){
+          data_split = data_ms.split(",");
+          var i;
+          var len_data = (data_split.length-1)/3;
+          if(data_split.length != 1){
+               
+            var data_base = new google.visualization.DataTable();
+            data_base.addColumn('date','Fecha inicio');
+            data_base.addColumn('string','Litros');
+            data_base.addRows(len_data);
+          
+            var table = new google.visualization.Table(document.getElementById('table_div'));
+            table.draw(data_base, {showRowNumber: true, width: '100%', height: '100%'});
+          }
 
-        function drawDateFormatTable(){
-          var data = new google.visualization.DataTable();
-          data.addColumn('date','Fecha inicio');
-          data.addColumn('number','Litros');
-          data.addRows([
-            [new Date(2020,0,27,7,15,0),20],
-            [new Date(2020,0,28,8,31,0),25],
-            [new Date(2020,0,29,8,0,0),30]
-          ]);
-          var formatter_long = new google.visualization.DateFormat({formatType: 'long'});
-          formatter_long.format(data, 0);
-          var options = {
-            title: 'GRAFICA',
-            width: 900,
-            height: 500,
-            hAxis: {
-              format: 'M/d/yy,hh:mm',
-              gridlines: {count: 15}
-            },
-            vAxis: {
-              gridlines: {color: 'none'},
-              minValue: 0
-            }
-          };
-          var table = new google.visualization.Table(document.getElementById('table_div'));
-          table.draw(data, {showRowNumber: true, width: '100%', height: '100%'});
-
-          var chart = new google.visualization.LineChart(document.getElementById('Grafica'));
-
-          chart.draw(data,options);
-
-
+         
         }
 
         function Registrar(){
@@ -288,6 +281,11 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
           }
         
       }
+      if (strcmp((char*)data, "Leer") == 0)
+      {
+        readFile();
+      }
+      
   }
 }
 
