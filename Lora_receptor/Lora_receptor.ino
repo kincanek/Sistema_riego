@@ -22,19 +22,19 @@ const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
   <head>
-    
+    <script type="text/javascript" src="swfobject.js"></script>
+    <script type="text/javascript" src="web_socket.js"></script>
     <meta http-equiv="content-type" content="text/html; charset=windows-1252">
     <title>ESP Web Server</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
       integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr"
       crossorigin="anonymous">
-    <link rel="icon" href="data:,">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" type="text/css" href= "smartphone.css" media="screen and (max-device-width: 480px)" />
+    
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
       rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 
     <style>
@@ -112,8 +112,8 @@ const char index_html[] PROGMEM = R"rawliteral(
       </div>
      
 
-    <script type="text/javascript">
-
+      <script type="text/javascript">
+      WEB_SOCKET_SWF_LOCATION = "WebSocketMain.swf";
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
       google.charts.load('current', {'packages':['table','corechart']});
