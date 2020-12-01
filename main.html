@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
     <meta http-equiv="content-type" content="text/html; charset=windows-1252">
     <title>ESP Web Server</title>
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
       integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr"
       crossorigin="anonymous">
     <link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
       rel="stylesheet">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
@@ -16,16 +17,16 @@
 
     <style>
         html {font-family: Arial; display: inline-block; text-align: center;}
-        p { font-size: 1.2rem;}
+        p { font-size: 1.4rem;}
         body {  margin: 0;}
-        .topnav { overflow: hidden; background-color: #50B8B4; color: white; font-size: 1rem; }
-        .content { padding: 20px; }
-        .card { background-color: rgb(236, 217, 217) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
+        .topnav { overflow: hidden; background-color: #50B8B4; color: rgb(255, 255, 255); font-size: 1rem; }
+        .content { padding: 30px; }
+        .card { background-color: rgb(123, 183, 190) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
         .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-    
-        input,
+        intput,
           label{
             margin: .4rem 0;
+          
     </style>
 
   </head>
@@ -51,12 +52,16 @@
             </select>
 
           <input id="hora" name="appt" min="09:00" max="18:00" required="" type="time">
-
+          <p><br>
+          </p>
           <button id="adicionar" onclick="Registrar()">Agregar</button>
 
           <div class="card">
-            <p> Registro de alarmas </p>
+            <p><br>
+            </p>
+        
             <table id="mytable" class="table table-bordered table-hover " style="width: 347px; height: 38px;">
+              <caption style="text-align:center">Registro de alarmas</caption>
               <tbody>
                 <tr>
                   <th style="text-align: center;">Dia Semana</th>
@@ -85,11 +90,12 @@
       </div>
      
 
-    <script>
+    <script type="text/javascript">
 
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
       google.charts.load('current', {'packages':['table','corechart']});
+      var data_ms;
       
 
       window.addEventListener('load', onLoad);
@@ -110,7 +116,13 @@
         }
 
         function onMessage(event) {
-          document.getElementById('Mensaje').innerHTML = event.data;
+          data_ms = event.data;
+          data_split = data_ms.split(" ");
+          if(data_split == "ON" || data_split== "OF"){
+            document.getElementById("state").innerHTML = data_ms;
+          }
+          
+
         }
         function onLoad(event) {
           initWebSocket();

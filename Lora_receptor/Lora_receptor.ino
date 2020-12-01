@@ -38,15 +38,16 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <style>
         html {font-family: Arial; display: inline-block; text-align: center;}
-        p { font-size: 1.2rem;}
+        p { font-size: 1.4rem;}
         body {  margin: 0;}
-        .topnav { overflow: hidden; background-color: #50B8B4; color: white; font-size: 1rem; }
-        .content { padding: 20px; }
-        .card { background-color: rgb(236, 217, 217) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
+        .topnav { overflow: hidden; background-color: #50B8B4; color: rgb(255, 255, 255); font-size: 1rem; }
+        .content { padding: 30px; }
+        .card { background-color: rgb(123, 183, 190) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
         .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-        input,
+        intput,
           label{
             margin: .4rem 0;
+          
     </style>
 
   </head>
@@ -72,13 +73,16 @@ const char index_html[] PROGMEM = R"rawliteral(
             </select>
 
           <input id="hora" name="appt" min="09:00" max="18:00" required="" type="time">
-
+          <p><br>
+          </p>
           <button id="adicionar" onclick="Registrar()">Agregar</button>
 
           <div class="card">
-
-            <p> Registro de alarmas </p>
+            <p><br>
+            </p>
+        
             <table id="mytable" class="table table-bordered table-hover " style="width: 347px; height: 38px;">
+              <caption style="text-align:center">Registro de alarmas</caption>
               <tbody>
                 <tr>
                   <th style="text-align: center;">Dia Semana</th>
@@ -100,7 +104,6 @@ const char index_html[] PROGMEM = R"rawliteral(
           <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
           <div id="table_div"></div>
         </div>
-
         <div class="card">
           <div id="Grafica"></div>
         </div>
@@ -112,17 +115,18 @@ const char index_html[] PROGMEM = R"rawliteral(
 
       var gateway = `ws://${window.location.hostname}/ws`;
       var websocket;
-      window.addEventListener('load', onLoad);
       google.charts.load('current', {'packages':['table','corechart']});
       var data_ms;
-   
+      
+
+      window.addEventListener('load', onLoad);
 
         function initWebSocket() {
           console.log('Trying to open a WebSocket connection...');
           websocket = new WebSocket(gateway);
           websocket.onopen    = onOpen;
           websocket.onclose   = onClose;
-          websocket.onmessage = onMessage; 
+          websocket.onmessage = onMessage; // <-- add this line
         }
         function onOpen(event) {
           console.log('Connection opened');
@@ -134,10 +138,13 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         function onMessage(event) {
           data_ms = event.data;
+          data_split = data_ms.split(" ");
+          if(data_split == "ON" || data_split== "OF"){
+            document.getElementById("state").innerHTML = data_ms;
+          }
+          
 
-          document.getElementById("state").innerHTML = data_ms;
         }
-
         function onLoad(event) {
           initWebSocket();
         }
