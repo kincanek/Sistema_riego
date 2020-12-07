@@ -101,6 +101,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       }
       if(strcmp((char*)data, "Leer") != 0 && strcmp((char*)data, "Enciende") != 0){
         Serial.println((char*)data);
+        enviar_msg((char*)data);
         
       }
   }
