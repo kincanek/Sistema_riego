@@ -1,0 +1,297 @@
+<!DOCTYPE html html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ESP Web Server</title>
+        <script type="text/javascript" src="canvasjs.min.js"></script>
+
+        <style>
+            .Titulo{overflow: hidden; 
+                background-color: #50B8B4;
+                text-align: center;
+                font-size: 1.2rem;
+             }
+            .card{
+                width:300px;
+                height: auto;
+                background-color: #ffffffda;
+                text-align: center;
+                
+            }
+            .cards{
+                max-width: 1000px; 
+                margin: 0 auto; 
+                display: grid; 
+                grid-gap: 2rem; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                align-self: center;
+            }
+            .dii{
+                overflow: scroll;
+                height: 400px;
+                width: 380px;
+            }
+
+        </style>
+
+
+    </head>
+    <body>
+        <div class="Titulo">
+            <h1>Sistema de control y monitoreo de riego</h1>
+        </div>
+        
+    </body>
+   
+    <div class="Cards">
+        <div class = card>
+            <p>PROGRAMAR RIEGO</p>
+            <p><select id="week" name="Dia">
+              <option value="0">Domingo</option>
+              <option value="1">Lunes</option>
+              <option value="2">Martes</option>
+              <option value="3">Miercoles</option>
+              <option value="4">Jueves</option>
+              <option value="5">Viernes</option>
+              <option value="6">Sabado</option>
+            </select>  Dia de riego </p>
+
+            <p><input id ="hora" name="appt" aria-required="" type="time"> Hora de riego</p>
+            <p><input id = "ho" type="number" min="0" max="23" placeholder="00">:<input id = "minn" type="number" min="0" max="59" placeholder="00"> Tiempo de riego</p>
+            <p></p>
+            <button id="adicionar" onclick="Registrar()">Agregar</button>
+            <p></p>
+            <table id = "mytable" class="table" style="width: 347px; height: 38px;">
+                <caption style="text-align: center">REGISTRO DE ALARMAS</caption>
+                <tbody>
+                    <tr>
+                        <th style="text-align: center;">Dia Semana</th>
+                        <th style="text-align: center;">Hora y munutos</th>
+                        <th style="text-align: center;">Tiempo de riego</th>
+                    </tr>
+                </tbody>
+            </table>
+            <button id="enviar" onclick="Send_lora()">Enviar</button>
+            <button id="eli" onclick="myDeleteFunction()">Eliminar fila</button>
+        </div>
+        &nbsp;
+        <div class="card">
+            <br>
+            <button id="encender" onclick="encender_motor()">Encender riego manual</button>
+            <p class="state">State <span id="state">%STATE%</span></p>
+            <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
+
+            <div class="dii">
+                <table id = "datos" border ="1" style="width: 347px; height: 38px;">
+                    <caption style="text-align: center">RIEGOS REALIZADOS</caption>
+                    <tbody>
+                        <tr>
+                            <th style="text-align: center;">Fecha</th>
+                            <th style="text-align: center;">Hora</th>
+                            <th style="text-align: center;">Litros</th>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+               
+            
+        </div>
+        <br>
+        
+
+
+    </div>
+    <div id="Grafica" style="height: 300px; width: 100%;"></div>
+
+    <script type="text/javascript">
+
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
+    var data_ms;
+    var data_split;
+    var i = 1;
+
+
+    window.addEventListener('load', onLoad);
+
+    function initWebSocket() {
+        console.log('Trying to open a WebSocket connection...');
+        websocket = new WebSocket(gateway);
+        websocket.onopen    = onOpen;
+        websocket.onclose   = onClose;
+        websocket.onmessage = onMessage;
+    }
+    function onOpen(event) {
+        console.log('Connection opened');
+    }
+    function onClose(event) {
+        console.log('Connection closed');
+        setTimeout(initWebSocket, 2000);
+    }
+
+    function onMessage(event) {
+        data_ms = event.data;
+
+        if(data_ms == "ON" || data_ms == "OFF" ){
+            document.getElementById("state").innerHTML = data_ms;
+        }
+    }
+
+    function onLoad(event) {
+        initWebSocket();
+    }
+
+    function encender_motor(){
+    
+        websocket.send("Enciende");
+
+    }
+
+    function Send_lora(){
+        var data_read = document.getElementById("mytable");
+
+        var total_filas = data_read.rows.length;
+        var i;
+        var day=[];
+        var time_ = [];
+        var tiem_riego = [];
+        var alarmas = [];
+
+        if(total_filas != 0 ){
+            for (i=1; i<total_filas;i++){
+                day.push(data_read.rows[i].cells[0].innerText);
+                time_.push(data_read.rows[i].cells[1].innerText);
+                tiem_riego.push(data_read.rows[i].cells[2].innerText);
+            }
+            alarmas.push(day);
+            alarmas.push(time_);
+            alarmas.push(tiem_riego);
+            
+        }
+
+    }
+    document.querySelectorAll('input[type=number]').forEach(e => e.oninput = () => {
+          
+          if (e.value.length >= 2) e.value = e.value.slice(0, 2);
+           
+          if (e.value.length === 1) e.value = '0' + e.value;
+        
+          if (!e.value) e.value = '00';
+    });
+
+    function Registrar(){
+        var dia_semana = document.getElementById("week").value;
+        var hora_pro = document.getElementById("hora").value;
+        var tem_rie = document.getElementById("ho").value +"."+ document.getElementById("minn").value;
+        
+        if(dia_semana==0){
+            dia_semana = "Domingo";
+        }
+        else if(dia_semana==1){
+            dia_semana = "Lunes";
+        }
+        else if(dia_semana==2){
+            dia_semana = "Martes";
+        }
+        else if(dia_semana==3){
+            dia_semana = "Miercoles";
+        }
+        else if(dia_semana==4){
+            dia_semana="Jueves";
+        }
+        else if(dia_semana==5){
+            dia_semana = "Viernes";
+        }
+        else{
+            dia_semana = "Sabado";
+        }
+
+        var table = document.getElementById("mytable");
+        var row = table.insertRow(i);
+        var cell1 = row.insertCell(0);
+        var cell2 = row.insertCell(1);
+        var cell3 = row.insertCell(2);
+
+        cell1.innerHTML = dia_semana;
+        cell2.innerHTML = hora_pro;
+        cell3.innerHTML = tem_rie;
+        i++;
+    }
+    function myDeleteFunction() {
+        
+        if(i==1){
+            i=1;
+        }else{
+            document.getElementById("mytable").deleteRow(i-1);
+            i--;
+        }
+            
+    
+    }
+    function vew_data(){
+        websocket.send("Leer");
+        setTimeout(drawDateFormatTable,5000);
+    }
+
+    function drawDateFormatTable(){
+
+        console.log(data_ms);
+        data_split = data_ms.split(",");
+        var i;
+        var len_data = (data_split.length-1)/3;
+        var table = document.getElementById("datos");
+        if(data_split.length > 1){
+        
+            var data = []; 
+            var dataSeries = { type: "line" };
+            var dataPoints = [];
+            var fecha;
+            var hora;
+            var j=0;
+            for(i=0;i<len_data;i++)
+            {
+                fecha = data_split[j].split("/");
+                hora = data_split[1+j].split(":");
+
+                var row = table.insertRow(i+1);
+                var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(1);
+                var cell3 = row.insertCell(2);
+
+                cell1.innerHTML = data_split[j];
+                cell2.innerHTML = data_split[1+j];
+                cell3.innerHTML = data_split[2+j];
+
+                dataPoints.push({
+                    x: new Date(fecha[0],fecha[1],fecha[2],hora[0],hora[1],0),
+                    y: parseFloat(data_split[2+j])
+                });
+                j = j + 3;
+            }
+            dataSeries.dataPoints = dataPoints;
+            data.push(dataSeries);
+
+            var chart = new CanvasJS.Chart("Grafica",
+            {
+                title:{
+                    text: "Riego"
+                },
+                axisX:{
+                    title: "Timeline",
+                    gridThickness: 1
+                },
+                axisY: {
+                    title: "Riego L"
+                },
+                data: data
+            });
+
+            chart.render();
+
+        }
+        
+    }
+
+    </script>
+
+</html>

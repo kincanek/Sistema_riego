@@ -1,12 +1,23 @@
-// Import required libraries
 #include <WiFi.h>
-#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncTCP.h>
 #include "SD.h"
 #include <SPI.h>
+#include <LoRa.h>
+#include <SPIFFS.h>
 
+SPIClass LoRaSPI;
+
+//"https://canvasjs.com/assets/script/canvasjs.min.js"
 File myFile;
 
+#define SPF 12
+#define LORA_SCK     5    // GPIO5  -- SX1278's SCK
+#define LOAR_MISO    19   // GPIO19 -- SX1278's MISO
+#define LORA_MOSI    27   // GPIO27 -- SX1278's MOSI
+#define LORA_CS      18   // GPIO18 -- SX1278's CS
+#define LORA_RST     23   // GPIO14 -- SX1278's RESET
+#define LORA_IRQ     26   // GPIO26 -- SX1278's IRQ(Interrupt Request)
 
 //---------------------------------------------------------------------
 const char* ssid = "Canek_server";
@@ -16,268 +27,8 @@ bool ledState = 0;
 const int ledPin = 25;
 //----------------------------------------------------------------------
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
-//**************************************************************************************************
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html>
-<html>
-  <head>
-    <script type="text/javascript" src="swfobject.js"></script>
-    <script type="text/javascript" src="web_socket.js"></script>
-    <meta http-equiv="content-type" content="text/html; charset=windows-1252">
-    <title>ESP Web Server</title>
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css"
-      integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr"
-      crossorigin="anonymous">
-    
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
-      rel="stylesheet">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"> </script>
-    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-
-    <style>
-        html {font-family: Arial; display: inline-block; text-align: center;}
-        p { font-size: 1.4rem;}
-        body {  margin: 0;}
-        .topnav { overflow: hidden; background-color: #50B8B4; color: rgb(255, 255, 255); font-size: 1rem; }
-        .content { padding: 30px; }
-        .card { background-color: rgb(123, 183, 190) box-shadow:; 2px 2px 12px 1px rgba(140,140,15,.5); }
-        .cards { max-width: 800px; margin: 0 auto; display: grid; grid-gap: 2rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-        intput,
-          label{
-            margin: .4rem 0;
-          
-    </style>
-
-  </head>
-  <body>
-    <div class="topnav">
-      <h1>Sistema de control y monitoreo</h1>
-    </div>
-
-    <div class="content">
-      <div class="cards">
-
-        <div class="card">
-          <p><i class="fas fa-tint" style="color:#00add6;"></i> PROGRAMAR RIEGO </p>
-        
-            <select id="week" name="Dia">
-              <option value="0">Domingo</option>
-              <option value="1">Lunes</option>
-              <option value="2">Martes</option>
-              <option value="3">Miercoles</option>
-              <option value="4">Jueves</option>
-              <option value="5">Viernes</option>
-              <option value="6">Sabado</option>
-            </select>
-
-          <input id="hora" name="appt" min="09:00" max="18:00" required="" type="time">
-          <p><br>
-          </p>
-          <button id="adicionar" onclick="Registrar()">Agregar</button>
-
-          <div class="card">
-            <p><br>
-            </p>
-        
-            <table id="mytable" class="table table-bordered table-hover " style="width: 347px; height: 38px;">
-              <caption style="text-align:center">Registro de alarmas</caption>
-              <tbody>
-                <tr>
-                  <th style="text-align: center;">Dia Semana</th>
-                  <th style="text-align: center;">Hora y minutos</th>
-                  <th style="text-align: center;">Eliminar</th>
-                </tr>
-              </tbody>
-            </table>
-            <button id="enviar" onclick="Send_lora()">Enviar</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <button id="encender" onclick="encender_motor()">Encender riego manual</button>
-          <p class="state">State: <span id="state">%STATE%</span></p>
-        </div>
-        
-        <div class="card">
-          <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
-          <div id="table_div"></div>
-        </div>
-        <div class="card">
-          <div id="Grafica"></div>
-        </div>
-
-      </div>
-     
-
-      <script type="text/javascript">
-      WEB_SOCKET_SWF_LOCATION = "WebSocketMain.swf";
-      var gateway = `ws://${window.location.hostname}/ws`;
-      var websocket;
-      google.charts.load('current', {'packages':['table','corechart']});
-      var data_ms;
-      var data_split;
-      
-
-      window.addEventListener('load', onLoad);
-
-        function initWebSocket() {
-          console.log('Trying to open a WebSocket connection...');
-          websocket = new WebSocket(gateway);
-          websocket.onopen    = onOpen;
-          websocket.onclose   = onClose;
-          websocket.onmessage = onMessage; // <-- add this line
-        }
-        function onOpen(event) {
-          console.log('Connection opened');
-        }
-        function onClose(event) {
-          console.log('Connection closed');
-          setTimeout(initWebSocket, 2000);
-        }
-
-        function onMessage(event) {
-          data_ms = event.data;
-
-        }
-
-        function onLoad(event) {
-          initWebSocket();
-        }
-
-        function encender_motor(){
-    
-          websocket.send("Enciende");
-          var myVar = setInterval(myTimer2,3000);
-        
-        }
-        function myTimer2(){
-          
-        if(data_ms == "ON" || data_ms == "OFF" ){
-          document.getElementById("state").innerHTML = data_ms;
-        }
-        }
-
-        function Send_lora(){
-          var data_read = document.getElementById("mytable");
-          var total_filas = data_read.rows.length;
-          var i;
-          var day=[];
-          var time_ = [];
-
-          if(total_filas != 0){
-            for (i=1; i<total_filas;i++){
-              day.push(data_read.rows[i].cells[0].innerText);
-              time_.push(data_read.rows[i].cells[1].innerText);
-            }
-            websocket.send(day);
-            websocket.send(time_);
-            
-          }
-
-        }
-
-        function vew_data(){
-          websocket.send("Leer");
-          var myVar = setInterval(myTimer,3000);
-        }
-        
-        function myTimer(){
-          google.charts.setOnLoadCallback(drawDateFormatTable);
-        }
-        
-        function drawDateFormatTable(event){
-          data_split = data_ms.split(",");
-          var i;
-          var len_data = (data_split.length-1)/3;
-          if(data_split.length != 1){
-            var fecha;
-            var hora;
-            var data_base = new google.visualization.DataTable();
-            data_base.addColumn('date','Fecha inicio');
-            data_base.addColumn('number','Litros');
-            data_base.addRows(len_data);
-            var j = 0;
-            for(i=0;i<len_data;i++)
-            {
-              
-             fecha = data_split[j].split("/")
-             hora = data_split[1+j].split(":")
-             data_base.setCell(i, 0, new Date(fecha[0],fecha[1],fecha[2],hora[0],hora[1],0));
-             data_base.setCell(i, 1,parseFloat(data_split[2+j]));
-             j = j + 3;
-            }
-           
-            
-            var formatter_long = new google.visualization.DateFormat({formatType: 'long'});
-            formatter_long.format(data_base, 0);
-            var table = new google.visualization.Table(document.getElementById('table_div'));
-            table.draw(data_base, {showRowNumber: true, width: 'auto', height: 'auto'});
-           
-            var options = {
-            title: 'GRAFICA',
-            width: 800,
-            height: 400,
-            hAxis: {
-              format: 'M/d/yy,hh:mm',
-              gridlines: {count: 15}
-            },
-            vAxis: {
-              gridlines: {color: 'none'},
-              minValue: 0
-            }
-          };
-          
-          var chart = new google.visualization.LineChart(document.getElementById('Grafica'));
-          chart.draw(data_base,options);
-          
-          }
-
-         
-        }
-
-        function Registrar(){
-          var dia_semana = document.getElementById("week").value;
-          var hora_pro = document.getElementById("hora").value;
-          var i = 1;
-          if(dia_semana==0){
-            dia_semana = "Domingo";
-          }
-          else if(dia_semana==1){
-            dia_semana = "Lunes";
-          }
-          else if(dia_semana==2){
-            dia_semana = "Martes";
-          }
-          else if(dia_semana==3){
-            dia_semana = "Miercoles";
-          }
-          else if(dia_semana==4){
-            dia_semana="Jueves";
-          }
-          else if(dia_semana==5){
-            dia_semana = "Viernes";
-          }
-          else{
-            dia_semana = "Sabado";
-          }
-
-          $("#mytable").append('<tr id="row' + i + '"><td>' + dia_semana +  '</td>' + '<td>' + hora_pro + "<td>"+ "<button type='button' onclick='productDelete(this);' class='btn btn-default'>" +"<span class='glyphicon glyphicon-remove' />" +"</button>" + "</td>" +"</tr>");
-          
-          i++;
-        }
-
-        function productDelete(ctl) {
-          $(ctl).parents("tr").remove();
-        }
-    </script>
-    </div>
-  </body>
-</html>
-)rawliteral";
-//************************************************************************************************
+AsyncWebSocket ws("/ws"); // crea un objeto llamado ws para manejar las conexiones en el camino 
 
 
 void readFile(){
@@ -289,21 +40,50 @@ void readFile(){
       inString += myFile.readString();
     }
     myFile.close();
+    //Imprime mensaje 
     Serial.println(inString);
+    // Envia mensaje
     ws.textAll(inString);
   }else{
-    Serial.println("No open data");
+    Serial.println("Error al leer el archivo");
   }
-}
 
+}
+void appendFile(fs::FS &fs, const char * path, const char * message){
+  
+    Serial.printf("Appending to file: %s\n", path);
+    File file = fs.open(path, FILE_APPEND);
+    if(!file){
+        Serial.println("Error al abrir el archivo");
+        return;
+    }
+    if(file.println(message)){
+        Serial.println("Message appended");
+    } else {
+        Serial.println("Append failed");
+    }
+    file.close();
+}
+/*
+ * Un WebSocket es una conexión persistente entre un cliente 
+ * y un servidor que permite la comunicación bidireccional entre 
+ * ambas partes mediante una conexión TCP. Esto significa que puede 
+ * enviar datos del cliente al servidor y del servidor al cliente en cualquier momento. 
+
+
+ */
+ /*
+  * La funcion es una funcion de devolucion de llamada que se ejecutar siempre que se reciba 
+  * nuevos datos de los clientes a travez del protocolo websocket
+  */
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
-      Serial.println((char*)data);
-      
+     
       if (strcmp((char*)data, "Enciende") == 0)
       {
+        Serial.println((char*)data);
         ledState = !ledState;
         
         if(ledState){
@@ -316,18 +96,32 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
       }
       if (strcmp((char*)data, "Leer") == 0)
       {
+        Serial.println((char*)data);
         readFile();
       }
-      
+      if(strcmp((char*)data, "Leer") != 0 && strcmp((char*)data, "Enciende") != 0){
+        Serial.println((char*)data);
+        
+      }
   }
 }
 
-
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
-             void *arg, uint8_t *data, size_t len) {
+/*
+ * Detector de eventos para manejar los diferentes pasos asincronicos del protocolo websocket
+ */
+ /*
+  * WS_EVT_CONNECT cuando un cliente ha iniciado sesión;
+WS_EVT_DISCONNECT cuando un cliente se ha desconectado;
+WS_EVT_DATA cuando se recibe un paquete de datos del cliente;
+WS_EVT_PONG en respuesta a una solicitud de ping;
+WS_EVT_ERROR cuando se recibe un error del cliente.
+  */
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
+      AwsEventType type,void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      Serial.printf("WebSocket client #%u connected from %s\n", 
+              client->id(), client->remoteIP().toString().c_str());
       break;
     case WS_EVT_DISCONNECT:
       Serial.printf("WebSocket client #%u disconnected\n", client->id());
@@ -360,11 +154,27 @@ String processor(const String& var){
 
 }
 
-void setup(){
-  // Serial port for debugging purposes
-  Serial.begin(115200);
+void enviar_msg(char* msg){
+  LoRa.beginPacket();                   // start packet
+  LoRa.print(msg);                 // add payload
+  LoRa.endPacket();                     // finish packet and send it
+}
+
+void recibe_msg(int packetSize){
+  if (packetSize == 0) return;          // if there's no packet, return
+  // read packet header bytes:
+  const char* packet = "";
+ 
+  while (LoRa.available()) {
+    packet += (char)LoRa.read();
+  }
+  Serial.println(packet);
+  //appendFile(SD,"/data.txt",packet);
+}
+
+void Init_SD(){
   SPI.begin(14,2,15,13);
-  if (!SD.begin())
+   if (!SD.begin(13))
   {
     Serial.println("initialization failed!");
     return;
@@ -372,18 +182,51 @@ void setup(){
   else{
     Serial.println("SD montada");
   }
+}
+
+void Init_Lora(){
+
+  LoRaSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
+  LoRa.setSPI(LoRaSPI);
+  LoRa.setPins(LORA_CS, LORA_RST, LORA_IRQ);
+
+  if (!LoRa.begin(915E6)) { 
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  LoRa.setSpreadingFactor(SPF);  
+  LoRa.setTxPower(17, PA_OUTPUT_PA_BOOST_PIN);
+  LoRa.setSyncWord(0xF3);
+}
+void setup(){
+// inicializacion del puerto serial
+  Serial.begin(115200);
+  
+  if(!SPIFFS.begin())
+  {
+    Serial.println("Error spiff");
+    while(1);
+  }
+  
+  Init_SD();
+  Init_Lora();
+
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, LOW);
- 
+  
   WiFi.softAP(ssid, password);
 
   initWebSocket();
-  
+    server.on("/canvasjs.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/canvasjs.min.js","text/javascript");
+  });
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
+    request->send(SPIFFS, "/index.html",String(),false, processor);
   });
 
+
   server.begin();
+
   
 }
 

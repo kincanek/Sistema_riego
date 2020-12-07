@@ -15,11 +15,24 @@ Librerias para el control del RTC
 */
 #include <ErriezDS3231.h>
 #include "RTClib.h"
-//#include <SPI.h>
 #include <LoRa.h>
 #include <SPI.h>
 #include "FS.h"
 #include "SPIFFS.h"
+
+/*
+ * With ICACHE_RAM_ATTR you put the function on the RAM.
+
+With ICACHE_FLASH_ATTR you put the function on the FLASH (to save RAM).
+
+Interrupt functions should use the ICACHE_RAM_ATTR. Function that are 
+called often, should not use any cache attribute.
+
+Important: NEVER access your flash inside an interrupt! The interrupt 
+can occur during a flash access, so if you try to access the flash at 
+the same time, you will get a crash (and sometimes this happens after 
+1-2 hours after you use your device).
+ */
 
 ICACHE_RAM_ATTR
 // Clases enlazadas al RTC
@@ -57,18 +70,6 @@ Variables a modificar, en caso de requerirlo
 const int T_Muestreo = 3000; // Tiempo de muestreo sensor ms
 const int tiempo_riego = 1;  // Tiempo de riego en minutos
 
-
-//////////// Definicion de alarma especifica ////////////
-
-/*
- * Alarm_especifica es true, cuando se requiere 
- * regar un un dia especifico durante el mes
- */
-bool alarm_especifica = false; // Activacion de alarma
-const int alarma1[] = {11, // Dia del mes 
-                        6, // hora
-                        2, // minutos
-                        0}; // segundos
 
 
 //////////// Definicion de alarmas periodicas ///////////
@@ -183,52 +184,9 @@ for(int i=0;i < rows;i++){
                           alarms[index_alarm][2]); // minutos
     // Enciende la alarma
     }
-    // Activa las interrupciones para la alarma
-    Serial.println(hoy.hour());
     Clock.alarmInterruptEnable(Alarm2, true);
 }
-void setAlarm1(bool std)
-{
-       /*
-     * Esta funcion permite fijar y actualizar las alarmas
-     * especificas
-     */
-    if (std){
-      // Programa el encendido del ESP32 un minuto antes
-      // de encender la bomba
-      Serial.println("Encendido de ESP programado");
-      if(alarma1[2]!=0){
-       Clock.setAlarm1(Alarm1MatchDate,
-                          alarma1[0], // dia del mes
-                          alarma1[1], // hora
-                          alarma1[2]-1, // minutos
-                          alarma1[3]); // segundos    
-        
-      }
-      if(alarma1[2]==0)
-      {
-          Clock.setAlarm1(Alarm1MatchDate,
-                          alarma1[0], // dia del mes
-                          alarma1[1]-1, // hora
-                          alarma1[2]+59, // minutos
-                          alarma1[3]); // segundos        
-      }
-    }
-    else
-    {
-      // Activa la alarma para encender el motor
-   Serial.println("Alarma para riego programada");
-   // Fijado de alarma
-   Clock.setAlarm1(Alarm1MatchDate,
-                          alarma1[0], // dia del mes
-                          alarma1[1], // hora
-                          alarma1[2], // minutos
-                          alarma1[3]); // segundos
-    }
 
-   // Enciende la alarma
-   Clock.alarmInterruptEnable(Alarm1, true);
-}
 
 void writeFile(fs::FS &fs, const char *path, char *mensaje)
 {
@@ -278,18 +236,16 @@ void Lora_sender(float mensaje,DateTime start,DateTime Stop)
 {
   Serial.print("Mensaje enviado");
   LoRa.beginPacket();
-  LoRa.print("Start" );
-  LoRa.print(start.day());
+  LoRa.print(start.year());
   LoRa.print("/");
   LoRa.print(start.month());
+  LoRa.print("/");
+  LoRa.print(start.day());
+  LoRa.print(",");
   LoRa.print(start.hour());
   LoRa.print(":");
   LoRa.println(start.minute());
-  LoRa.print("Stop" );
-  LoRa.print(Stop.hour());
-  LoRa.print(":");
-  LoRa.println(Stop.minute());
-  LoRa.print(" Volumen: ");
+  LoRa.print(",");
   LoRa.print(mensaje);
   LoRa.endPacket();
 }
@@ -344,33 +300,30 @@ void Stop_alarm(){
 }
 void Activate_alarm(bool stado = false){
       /////////////////// Activacion de alarmas /////////////////////////
-    if (alarm_especifica){
-      setAlarm1(stado);
-    }
-    else{
-      Clock.alarmInterruptEnable(Alarm1, false);
-    }
-
+     
     if(alarm_periodica){
       setAlarm2(stado);
     }
     else{
       Clock.alarmInterruptEnable(Alarm2, false);
     }   
+    Clock.alarmInterruptEnable(Alarm1, false);
     ///////////////////////////////////////////////////////////////////
 }
 void print_wakeup_reason(){
   esp_sleep_wakeup_cause_t wakeup_reason;
-
   wakeup_reason = esp_sleep_get_wakeup_cause();
 
   switch(wakeup_reason)
   {
     case ESP_SLEEP_WAKEUP_EXT0 :{
       Serial.println("Wakeup caused by external signal using RTC_IO"); 
+      if(clock.getAlarmFlag(Alarm2)){
       Activate_alarm(false);
       sleep_start = false;
       break;
+      }
+
     }
     case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
     case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
@@ -455,10 +408,7 @@ void loop()
             Serial.println(volumen);
             Serial.println("Motor apagado");
             digitalWrite(RELE,HIGH);
-//            char message[150];
-//            dtostrf();
-//            hoy.hour() + ":" + hoy.minute()+ volumen; 
-            
+
             Lora_sender(volumen,hoyy,pause);
             volumen = 0;  
             sleep_start = true;
