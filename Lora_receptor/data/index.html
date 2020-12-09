@@ -57,9 +57,10 @@
             </select>  Dia de riego </p>
 
             <p><input id ="hora" name="appt" aria-required="" type="time"> Hora de riego</p>
-            <p><input id = "ho" type="number" min="0" max="23" placeholder="00">:<input id = "minn" type="number" min="0" max="59" placeholder="00"> Tiempo de riego</p>
+            <p><input id = "ho" type="number" min="0" max="12" placeholder="0">:<input id = "minn" type="number" min="1" max="59" placeholder="1"> Tiempo de riego</p>
             <p></p>
             <button id="adicionar" onclick="Registrar()">Agregar</button>
+            <button id="ver" onclick="vew_data_alarm()">Alarmas registradas</button>
             <p></p>
             <table id = "mytable" border ="1" class="table" style="width: 347px; height: 38px;">
                 <caption style="text-align: center">REGISTRO DE ALARMAS</caption>
@@ -73,12 +74,13 @@
             </table>
             <button id="enviar" onclick="Send_lora()">Enviar</button>
             <button id="eli" onclick="myDeleteFunction()">Eliminar fila</button>
+            <p class="stde"><span id="stde"></span></p>
         </div>
         &nbsp;
         <div class="card">
             <br>
-            <button id="encender" onclick="encender_motor()">Encender riego manual</button>
-            <p class="state">State <span id="state">%STATE%</span></p>
+            <button id="encender" onclick="encender_motor()">Encender / Apagar riego</button>
+            <p class="state">Estado Motor <span id="state">%STATE%</span></p>
             <button id="visualizar" onclick="vew_data()">Mostrar datos</button>
 
             <div class="dii">
@@ -109,11 +111,11 @@
     var websocket;
     var data_ms;
     var data_split;
-    var i = 1;
-
+    var x_i = 1;
+    
 
     window.addEventListener('load', onLoad);
-
+  
     function initWebSocket() {
         console.log('Trying to open a WebSocket connection...');
         websocket = new WebSocket(gateway);
@@ -134,6 +136,13 @@
 
         if(data_ms == "ON" || data_ms == "OFF" ){
             document.getElementById("state").innerHTML = data_ms;
+        }
+        if(data_ms == "Alarmas activadas correctamente"){
+            document.getElementById("stde").innerHTML = data_ms
+            console.log(data_ms);
+        }
+        if(data_ms == "Error al activar alarmas"){
+            document.getElementById("stde").innerHTML = data_ms
         }
     }
 
@@ -169,6 +178,7 @@
             return 6;
         }
     }
+    
     function Send_lora(){
         var data_read = document.getElementById("mytable");
 
@@ -186,24 +196,17 @@
                 time_.push(data_read.rows[i].cells[1].innerText);
                 tiem_riego.push(data_read.rows[i].cells[2].innerText);
             }
+            alarmas.push(total_filas - 1);
             alarmas.push(day);
             alarmas.push(time_);
             alarmas.push(tiem_riego);
-            websocket.send(day);
-            websocket.send(time_);
-            websocket.send(tiem_riego);
+            alarmas.push("A");
+            websocket.send(alarmas);
             
         }
 
     }
-    document.querySelectorAll('input[type=number]').forEach(e => e.oninput = () => {
-          
-          if (e.value.length >= 2) e.value = e.value.slice(0, 2);
-           
-          if (e.value.length === 1) e.value = '0' + e.value;
-        
-          if (!e.value) e.value = '00';
-    });
+
 
     function Registrar(){
         var dia_semana = document.getElementById("week").value;
@@ -231,29 +234,85 @@
         else{
             dia_semana = "Sabado";
         }
+        if(x_i<=7){
+            var table = document.getElementById("mytable");
+            var row = table.insertRow(x_i);
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+            var cell3 = row.insertCell(2);
 
-        var table = document.getElementById("mytable");
-        var row = table.insertRow(i);
-        var cell1 = row.insertCell(0);
-        var cell2 = row.insertCell(1);
-        var cell3 = row.insertCell(2);
+            cell1.innerHTML = dia_semana;
+            cell2.innerHTML = hora_pro;
+            cell3.innerHTML = tem_rie;
+            x_i++;
 
-        cell1.innerHTML = dia_semana;
-        cell2.innerHTML = hora_pro;
-        cell3.innerHTML = tem_rie;
-        i++;
+        }
+
     }
     function myDeleteFunction() {
         
-        if(i==1){
-            i=1;
+        if(x_i==1){
+            x_i=1;
         }else{
-            document.getElementById("mytable").deleteRow(i-1);
-            i--;
+            document.getElementById("mytable").deleteRow(x_i-1);
+            x_i--;
         }
             
     
     }
+    function vew_data_alarm(){
+        websocket.send("LeerAlarm");
+        setTimeout(vew_alarm,5000);
+    }
+
+    function vew_alarm(){
+        console.log(data_ms);
+        data_split = data_ms.split(",");
+        var len_data = (data_split.length-1)/3;
+        var table = document.getElementById("mytable");
+
+        if(data_split.length > 1){
+            var kk = 1;
+            var j=3;
+            for(kk=1;kk <len_data;kk++){
+                var row = table.insertRow(x_i);
+                var cell1 = row.insertCell(0);
+                var cell2 = row.insertCell(1);
+                var cell3 = row.insertCell(2);
+                var dia_semana = data_split[j]
+
+                if(dia_semana==0){
+                    dia_semana = "Domingo";
+                }
+                else if(dia_semana==1){
+                    dia_semana = "Lunes";
+                }
+                else if(dia_semana==2){
+                    dia_semana = "Martes";
+                }
+                else if(dia_semana==3){
+                    dia_semana = "Miercoles";
+                }
+                else if(dia_semana==4){
+                    dia_semana="Jueves";
+                }
+                else if(dia_semana==5){
+                    dia_semana = "Viernes";
+                }
+                else{
+                    dia_semana = "Sabado";
+                }
+
+                cell1.innerHTML = dia_semana;
+                cell2.innerHTML = data_split[j+1];
+                cell3.innerHTML = data_split[j+2];
+                x_i++;
+                j=j+3;
+            }
+        }
+
+    }
+
     function vew_data(){
         websocket.send("Leer");
         setTimeout(drawDateFormatTable,5000);

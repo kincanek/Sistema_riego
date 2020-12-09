@@ -26,7 +26,8 @@ void loraData(){
   display.drawStringMaxWidth(0 , 26 , 128, packet);
   display.drawString(0, 0, rssi); 
   display.display();
-  Serial.println(rssi);
+
+  
 }
 
 void cbk(int packetSize) {
@@ -34,6 +35,9 @@ void cbk(int packetSize) {
   packSize = String(packetSize,DEC);
   for (int i = 0; i < packetSize; i++) { packet += (char) LoRa.read(); }
   rssi = "RSSI " + String(LoRa.packetRssi(), DEC) ;
+  Serial.println(rssi);
+  Serial.println("Snr: " + String(LoRa.packetSnr()));
+  Serial.println(packet);
   loraData();
 }
 

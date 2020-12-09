@@ -5,11 +5,18 @@
 #include <SPI.h>
 #include <LoRa.h>
 #include <SPIFFS.h>
+#include <Separador.h>
 
 SPIClass LoRaSPI;
 
+Separador s;
+
+String mensajes = "";
+volatile bool on_of = false;
+
 //"https://canvasjs.com/assets/script/canvasjs.min.js"
 File myFile;
+
 
 #define SPF 12
 #define LORA_SCK     5    // GPIO5  -- SX1278's SCK
@@ -25,98 +32,62 @@ const char* password = "123456789";
 //---------------------------------------------------------------------
 bool ledState = 0;
 const int ledPin = 25;
+volatile bool estado_lora = true;
+long t0= 0;
+char* decifre_msg = "";
+String msgString = "";
 //----------------------------------------------------------------------
 AsyncWebServer server(80);
 
-AsyncWebSocket ws("/ws"); // crea un objeto llamado ws para manejar las conexiones en el camino 
+AsyncWebSocket ws("/ws"); 
 
 
-void readFile(){
-  myFile = SD.open("/data.txt","r");
-  if(myFile){
-    Serial.println("Data: ");
-    String inString;
-    while(myFile.available()){
-      inString += myFile.readString();
-    }
-    myFile.close();
-    //Imprime mensaje 
-    Serial.println(inString);
-    // Envia mensaje
-    ws.textAll(inString);
-  }else{
-    Serial.println("Error al leer el archivo");
-  }
-
-}
-void appendFile(fs::FS &fs, const char * path, const char * message){
-  
-    Serial.printf("Appending to file: %s\n", path);
-    File file = fs.open(path, FILE_APPEND);
-    if(!file){
-        Serial.println("Error al abrir el archivo");
-        return;
-    }
-    if(file.println(message)){
-        Serial.println("Message appended");
-    } else {
-        Serial.println("Append failed");
-    }
-    file.close();
-}
-/*
- * Un WebSocket es una conexión persistente entre un cliente 
- * y un servidor que permite la comunicación bidireccional entre 
- * ambas partes mediante una conexión TCP. Esto significa que puede 
- * enviar datos del cliente al servidor y del servidor al cliente en cualquier momento. 
-
-
- */
- /*
-  * La funcion es una funcion de devolucion de llamada que se ejecutar siempre que se reciba 
-  * nuevos datos de los clientes a travez del protocolo websocket
-  */
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
      
-      if (strcmp((char*)data, "Enciende") == 0)
+      if (strcmp((char*)data,"Enciende") == 0)
       {
         Serial.println((char*)data);
         ledState = !ledState;
         
         if(ledState){
-          ws.textAll("ON");
+          //enviar_msg("ON");
+          mensajes = "ON";
+          on_of = true;
          }
          else{
-          ws.textAll("OFF");
+          //enviar_msg("OFF");
+          mensajes = "OFF";
+          on_of = true;
           }
         
       }
       if (strcmp((char*)data, "Leer") == 0)
       {
         Serial.println((char*)data);
-        readFile();
-      }
-      if(strcmp((char*)data, "Leer") != 0 && strcmp((char*)data, "Enciende") != 0){
-        Serial.println((char*)data);
-        enviar_msg((char*)data);
+        readFile("/data.txt");
         
       }
+      if (strcmp((char*)data, "LeerAlarm") == 0)
+      {
+        Serial.println((char*)data);
+        readFile("/alarma.txt");
+        
+      }
+      if(strcmp((char*)data, "Leer") != 0 && strcmp((char*)data, "Enciende") != 0){
+        mensajes =  String((char*)data);
+        on_of = true;
+        //enviar_msg(msgString);
+       //Serial.println(msgString);
+ 
+      }
+      
   }
+  
 }
 
-/*
- * Detector de eventos para manejar los diferentes pasos asincronicos del protocolo websocket
- */
- /*
-  * WS_EVT_CONNECT cuando un cliente ha iniciado sesión;
-WS_EVT_DISCONNECT cuando un cliente se ha desconectado;
-WS_EVT_DATA cuando se recibe un paquete de datos del cliente;
-WS_EVT_PONG en respuesta a una solicitud de ping;
-WS_EVT_ERROR cuando se recibe un error del cliente.
-  */
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, 
       AwsEventType type,void *arg, uint8_t *data, size_t len) {
   switch (type) {
@@ -136,6 +107,36 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
+void readFile(String paht){
+  myFile = SD.open(paht,"r");
+  if(myFile){
+    Serial.println("Data: ");
+    String inString;
+    while(myFile.available()){
+      inString += myFile.readString();
+    }
+    myFile.close();
+    Serial.println(inString);
+    ws.textAll(inString);
+  }else{
+    Serial.println("Error al leer el archivo");
+  }
+
+}
+void appendFile(fs::FS &fs, const char * path, String message){
+    Serial.printf("Appending to file: %s\n", path);
+    File file = fs.open(path, FILE_APPEND);
+    if(!file){
+        Serial.println("Error al abrir el archivo");
+        return;
+    }
+    if(file.println(message)){
+        Serial.println("Message appended");
+    } else {
+        Serial.println("Append failed");
+    }
+    file.close();
+}
 
 void initWebSocket() {
   ws.onEvent(onEvent);
@@ -145,7 +146,7 @@ void initWebSocket() {
 
 String processor(const String& var){
   Serial.println(var);
-
+  
   if(ledState){
     return "ON";
   }
@@ -155,22 +156,35 @@ String processor(const String& var){
 
 }
 
-void enviar_msg(char* msg){
+void enviar_msg(String msg){
   LoRa.beginPacket();                   // start packet
   LoRa.print(msg);                 // add payload
   LoRa.endPacket();                     // finish packet and send it
 }
 
 void recibe_msg(int packetSize){
-  if (packetSize == 0) return;          // if there's no packet, return
-  // read packet header bytes:
-  const char* packet = "";
- 
+  if (packetSize == 0) return;
+  String packet = "";
   while (LoRa.available()) {
     packet += (char)LoRa.read();
   }
   Serial.println(packet);
-  //appendFile(SD,"/data.txt",packet);
+  if(packet == "ON"){
+    ws.textAll("ON");
+  }
+  else if(packet == "OFF"){
+    ws.textAll("OFF");
+  }
+  else if(packet == "Alarma"){
+    ws.textAll("Alarmas activadas correctamente");
+  }else if(packet == "AlarmaE"){
+    ws.textAll("Error al activar alarmas");
+  }
+  else{
+    appendFile(SD,"/data.txt",packet);
+  }
+
+  
 }
 
 void Init_SD(){
@@ -234,4 +248,15 @@ void setup(){
 void loop() {
   ws.cleanupClients();
   digitalWrite(ledPin, ledState);
+  if(on_of){
+    enviar_msg(mensajes);
+    on_of = false;
+    Serial.print(mensajes);
+    delay(100);
+
+  }else{
+    recibe_msg(LoRa.parsePacket());
+  }
+  
+
 }

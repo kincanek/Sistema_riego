@@ -1,236 +1,115 @@
-// TTGO LORA OLED ESP32 V.2.1.6
-/*
-Libreria que permite la comunicacion con dispositivos 
-por bus I2C (inter integrated circuit)
-SDA: Datos y SCL: Reloj
-
-SDA: Pin GPIO 21
-SCL: Pin GPIO 22
-*/
 
 #include <Wire.h>
-
-/*
-Librerias para el control del RTC
-*/
 #include <ErriezDS3231.h>
 #include "RTClib.h"
 #include <LoRa.h>
 #include <SPI.h>
-#include "FS.h"
-#include "SPIFFS.h"
+#include <Separador.h>
+#include "SD.h"
 
-/*
- * With ICACHE_RAM_ATTR you put the function on the RAM.
-
-With ICACHE_FLASH_ATTR you put the function on the FLASH (to save RAM).
-
-Interrupt functions should use the ICACHE_RAM_ATTR. Function that are 
-called often, should not use any cache attribute.
-
-Important: NEVER access your flash inside an interrupt! The interrupt 
-can occur during a flash access, so if you try to access the flash at 
-the same time, you will get a crash (and sometimes this happens after 
-1-2 hours after you use your device).
- */
+Separador s;
+SPIClass LoRaSPI;
 
 ICACHE_RAM_ATTR
-// Clases enlazadas al RTC
+
 ErriezDS3231 Clock; 
 RTC_DS3231 rtcc;
 
 // Pin entrada de interrupcion del reloj
-#define INT_PIN 13
+#define INT_PIN 35
 // Pin GPIO 04 Salida de ecendido 
 #define RELE 4 
 // Pin GPIO 25 Entrada de interrupcion Sensor de agua
 #define Sensor 25 
 
-#define SCK 5 // GPIO5 -- SCK
-#define MISO 19 // GPIO19 -- MISO
-#define MOSI 27 // GPIO27 -- MOSI
-#define SS 18 // GPIO18 -- CS
-#define RST 23 // GPIO23 -- RESET
-#define DI0 26 // GPIO26 -- IRQ(Interrupt Request)
-#define BAND 915E6
+#define SPF 12
+#define LORA_SCK     5    // GPIO5  -- SX1278's SCK
+#define LOAR_MISO    19   // GPIO19 -- SX1278's MISO
+#define LORA_MOSI    27   // GPIO27 -- SX1278's MOSI
+#define LORA_CS      18   // GPIO18 -- SX1278's CS
+#define LORA_RST     23   // GPIO14 -- SX1278's RESET
+#define LORA_IRQ     26   // GPIO26 -- SX1278's IRQ(Interrupt Request)
 
-//#define BUTTON_PIN_BITMASK 0X8000
+volatile bool alarmInterrupt = false; 
+volatile int count = 0; 
 
-// Variables de interrupciones
-volatile bool alarmInterrupt = false; // Interrrupcion de la alarma
-volatile int count = 0; // Interrupcion del sensor
-
-// Define la entrada y salida del modo sleep
 bool sleep_start = true;
 
-////////////////////////////////////////////////////////////
-/*
-Variables a modificar, en caso de requerirlo
-*/
-const int T_Muestreo = 3000; // Tiempo de muestreo sensor ms
-const int tiempo_riego = 1;  // Tiempo de riego en minutos
+const int T_Muestreo = 3000; 
+const int tiempo_riego = 1;  
+volatile int packetSize;
 
+bool alarm_especifica = false; 
+const int alarma1[] = {11, 
+                        6, 
+                        2, 
+                        0}; 
 
+bool alarm_periodica = true; 
+int rows; 
+int alarms[50][3];
 
-//////////// Definicion de alarmas periodicas ///////////
-
-/*
- Dia de la semana 0: domingo 1: Lunes 2: Martes 
- 3: Miercoles 4:Jueves 5:Viernes 6:Sabado 
- Horas (0 - 24)
- Minutos (0 - 59)
-*/
-
-
-bool alarm_periodica = true; // Activacion de alarma
-#define rows 3 // Numero de alarmas
-const int alarms[][3]= {{5,22,56},
-                      {5,23,5},
-                      {5,23,10}};                           
-
-
-//////////////////////////////////////////////////////////////
-
-// Constante de conversion del sensor
 const float K = 6.997; 
-float volumen = 0; // Volumen en litros
-long t0 = 0; // Tiempo transcurrido de riego
+float volumen = 0; 
+long t0 = 0; 
 
-
-// Contador de pulsos
 void contador()
 {
-    /*
-Esta funcion permite el aumento rapido del contador 
-cuando se hacen interrupciones del sensor 
-   */
     count++;
 }
 
 void onAlarm()
 {
-  /*
-Esta funcion permite hacer un llamado rapido
-para la interrupccion del reloj
-   */
     alarmInterrupt = true;
 }
 
-void setAlarm2(bool std)
+void setAlarm2()
 {
-    /*
-Esta funcion permite fijar y actualizar las alarmas
-periodicas
-     */
-DateTime hoy = rtcc.now(); // Lectura del RTC
+  DateTime hoy = rtcc.now();
+  int index_alarm = 0;
 
-int index_alarm = 0;
-
-/////////////////// Buscamos que alarma activar ////////////////
-for(int i=0;i < rows;i++){
-  //Busca la alarma siguiente
-  if(alarms[i][0]>=hoy.dayOfTheWeek()){
-    // Si la alarma es el dia actual, busca 
-    // que la hora y minutos sean mayores al actual
-    if(alarms[i][0]==hoy.dayOfTheWeek()){
-      // Compara la hora y los minutos
-      if(alarms[i][1] == hoy.hour() && alarms[i][2] > hoy.minute() ){
-        index_alarm = i;
-        break;
+  for(int i=0;i < rows;i++){
+    if(alarms[i][0]>=hoy.dayOfTheWeek()){
+      if(alarms[i][0]==hoy.dayOfTheWeek()){
+        if(alarms[i][1] == hoy.hour() && alarms[i][2] > hoy.minute() ){
+          index_alarm = i;
+          break;
+        }
+        if(alarms[i][1] > hoy.hour()){
+          index_alarm = i;
+          break;
+        }
       }
-      if(alarms[i][1] > hoy.hour()){
+      if(alarms[i][0] != hoy.dayOfTheWeek()){
         index_alarm = i;
         break;
       }
     }
-    // En caso de que el dia de la semana sea diferente 
-    // a la actual
-    if(alarms[i][0] != hoy.dayOfTheWeek()){
-      index_alarm = i;
-      break;
-      }
   }
+  
+  Serial.println("Alarma para riego programada");
+  Clock.setAlarm2(Alarm2MatchDay,
+              alarms[index_alarm][0], 
+              alarms[index_alarm][1], 
+              alarms[index_alarm][2]); 
 
-}
-// Si es verdadero se activa la alarma para encender el ESP32
-// Un minuto antes de que se encienda el motor
-    if(std)
-    {
-      Serial.println("Encendido de ESP programado");
-      if(alarms[index_alarm][2] == 0)
-      {
-        Serial.println(index_alarm);
-       Clock.setAlarm2(Alarm2MatchDay, //Modo de alarma
-                          alarms[index_alarm][0], // Dia de la semana
-                          alarms[index_alarm][1]-1, // Hora
-                          alarms[index_alarm][2]+59);     
-      }
-      if(alarms[index_alarm][2] != 0){
-        Serial.println(index_alarm);
-       Clock.setAlarm2(Alarm2MatchDay, //Modo de alarma
-                          alarms[index_alarm][0], // Dia de la semana
-                          alarms[index_alarm][1], // Hora
-                          alarms[index_alarm][2]-1);     
-      }
-    }
-    // Activamos la alarma para encender el motor
-    else{
-    Serial.println("Alarma para riego programada");
-    Serial.println(index_alarm);
-    // Fijado de alarma
-    Clock.setAlarm2(Alarm2MatchDay, //Modo de alarma
-                          alarms[index_alarm][0], // Dia de la semana
-                          alarms[index_alarm][1], // Hora
-                          alarms[index_alarm][2]); // minutos
-    // Enciende la alarma
-    }
-    Clock.alarmInterruptEnable(Alarm2, true);
+  Clock.alarmInterruptEnable(Alarm2, true);
+    
 }
 
-
-void writeFile(fs::FS &fs, const char *path, char *mensaje)
+void setAlarm1()
 {
-  Serial.println("Mensaje escrito en archivo");
-
-  File file = fs.open(path,FILE_WRITE);
-  if(!file)
-  {
-    Serial.println("Fallo en abrir el archivo para escribir");
+  Serial.println("Alarma para riego programada");
+  
+  Clock.setAlarm1(Alarm1MatchDate,
+                alarma1[0], 
+                alarma1[1],
+                alarma1[2], 
+                alarma1[3]); 
     
-  }
-  if(file.println(mensaje))
-  {
-    Serial.println("Mensaje guardado");
-  }
-  else
-  {
-    Serial.println("Error de escritura");
-  }
-  file.close();
+  Clock.alarmInterruptEnable(Alarm1, true);
 }
 
-void readFile(fs::FS &fs, const char * path)
-{
-  char data[127];
-  Serial.println("Leyendo mensaje");
-
-  File file = fs.open(path,"r");
-
-  if(!file || file.isDirectory()){
-        Serial.println("- invalid file");
-        return;
-    }
-
-        while(file.available()) { 
-        //data = file.readStringUntil('\0');
-        sprintf(data,"%s",file.readStringUntil('\n'));
-        Serial.println(data);        
-    }
-      file.close();  //Close file
-      Serial.println("File Closed");
-    
-    
-}
 
 void Lora_sender(float mensaje,DateTime start,DateTime Stop)
 {
@@ -244,179 +123,200 @@ void Lora_sender(float mensaje,DateTime start,DateTime Stop)
   LoRa.print(",");
   LoRa.print(start.hour());
   LoRa.print(":");
-  LoRa.println(start.minute());
+  LoRa.print(start.minute());
   LoRa.print(",");
   LoRa.print(mensaje);
+  LoRa.print(",");
   LoRa.endPacket();
 }
-// Calculo del volumen en l/m
+
 void In_volumen(float dV)
 {
-  // Recibe como entrada el caudal
-    volumen += dV / 60 * (millis() - t0) / 1000.0;
-    /* millis() devuelve el numero de milisegundos desde 
-     *  que la placa se empezo a ejecutar luego del encendido
-     *  se desborda despues de 50 dias y vuelve a comenzar.
-     *  millis() no interfiere en la ejecucion del programa
-     *  como delay()
-     */
-    t0 = millis();
+  volumen += dV / 60 * (millis() - t0) / 1000.0;
+  t0 = millis();
 }
 
-// Obtenemos la frecuencia
 float Frecuencia()
 {
-/*
- * Esta funcion permite contar el numero de pulsos
- * en un tiempo determinado. Se hace de esta manera
- * para evitar mediciones falsas al principio y el
- * incremento de la variables count es menor.
- */
-    count = 0;
-      delay(T_Muestreo); // Detenemos la ejecucion del programa
-    return (float)count * 1000 / T_Muestreo;
+  count = 0;
+  delay(T_Muestreo); 
+  return (float)count * 1000 / T_Muestreo;
 }
 
-// Medimos el caudal y el volumen 
+
 void Medir( )
 {
-    float caudal = Frecuencia() / K ; // Calculo el caudal 
-    In_volumen(caudal); // Manda a llamar la funcion que suma el volumen 
+  float caudal = Frecuencia() / K ; 
+  In_volumen(caudal); 
 
 }
 void Stop_alarm(){
-              ///////////////////////////////////////////////////////
-             // Desactivamos las alarmas para evitar interferencias
-            if(Clock.getAlarmFlag(Alarm2))
-            {
-              Clock.clearAlarmFlag(Alarm2);
-            }
-            
-            if(Clock.getAlarmFlag(Alarm1))
-            {
-              Clock.clearAlarmFlag(Alarm1);
-            }
-            ////////////////////////////////////////////////////////////
+  if(Clock.getAlarmFlag(Alarm2))
+  {
+    Clock.clearAlarmFlag(Alarm2);
+  }
+  if(Clock.getAlarmFlag(Alarm1))
+  {
+    Clock.clearAlarmFlag(Alarm1);
+  }
 }
-void Activate_alarm(bool stado = false){
-      /////////////////// Activacion de alarmas /////////////////////////
-     
+
+void Activate_alarm(){
+
+    if (alarm_especifica){
+      setAlarm1();
+    }
+    else{
+      Clock.alarmInterruptEnable(Alarm1, false);
+    }
+
     if(alarm_periodica){
-      setAlarm2(stado);
+      setAlarm2();
     }
     else{
       Clock.alarmInterruptEnable(Alarm2, false);
     }   
-    Clock.alarmInterruptEnable(Alarm1, false);
-    ///////////////////////////////////////////////////////////////////
+
 }
-void print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
-  wakeup_reason = esp_sleep_get_wakeup_cause();
 
-  switch(wakeup_reason)
-  {
-    case ESP_SLEEP_WAKEUP_EXT0 :{
-      Serial.println("Wakeup caused by external signal using RTC_IO"); 
-      if(clock.getAlarmFlag(Alarm2)){
-      Activate_alarm(false);
-      sleep_start = false;
-      break;
+void enviar_msg(String msg){
+  LoRa.beginPacket(); 
+    LoRa.print(msg);   
+  LoRa.endPacket();  
+}
+
+bool prog = true;
+int check = 0;
+
+
+void recibe_msg(int packetSize){
+  if (packetSize == 0) return;
+  String packet = "";
+  String last_caracter = "";
+  while (LoRa.available()) {
+    last_caracter = (char)LoRa.read();
+    packet += last_caracter;
+  }
+  Serial.println(packet);
+  if(packet == "LeerAlarm"){
+    enviar_msg("En proceso");
+  }
+  else if(packet != "ON" || packet != "OFF"){
+    if(last_caracter == "A"){
+      String var_tem = s.separa(packet,',',0);
+      rows = var_tem.toInt();
+  
+      for(int i = 1; i <= rows; i++){
+        String var_tem = s.separa(packet,',',i);
+        String tiem_tem = s.separa(packet,',',i + rows);
+        String H = s.separa(tiem_tem,':',0);
+        String M = s.separa(tiem_tem,':',1);
+
+        alarms[check][0] = var_tem.toInt();
+        alarms[check][1] = H.toInt();
+        alarms[check][2] = M.toInt();
+        Serial.print(alarms[check][0]);
+        Serial.print(alarms[check][1]);
+        Serial.print(alarms[check][2]);
+        check++;
       }
-
+    
+      check = 0;
+      Stop_alarm();
+      Activate_alarm();
+      enviar_msg("Alarma");
+    }else{
+      enviar_msg("AlarmaE");
     }
-    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
-    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
-    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
   }
 }
+void Init_SD(){
+  SPI.begin(14,2,15,13);
+   if (!SD.begin(13))
+  {
+    Serial.println("initialization failed!");
+    return;
+  }
+  else{
+    Serial.println("SD montada");
+  }
+}
+void Init_Lora(){
 
+  LoRaSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
+  LoRa.setSPI(LoRaSPI);
+  LoRa.setPins(LORA_CS, LORA_RST, LORA_IRQ);
+
+  if (!LoRa.begin(915E6)) { 
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  LoRa.setSpreadingFactor(SPF);  
+  LoRa.setTxPower(17, PA_OUTPUT_PA_BOOST_PIN);
+  LoRa.setSyncWord(0xF3);
+}
 void setup()
 {
-    // Inicializacion 
-    Serial.begin(9600);
-    SPI.begin(SCK,MISO,MOSI,SS);
-    LoRa.setPins(SS,RST,DI0);
-    
-    if(!LoRa.begin(915E6))
-    {
-      Serial.println("Starting Lora failed");
-      while(1);
-    }
-    LoRa.setSpreadingFactor(12);
-    LoRa.setTxPower(17, PA_OUTPUT_PA_BOOST_PIN);
-
-    if(!SPIFFS.begin(true))
-    {
-      Serial.println("Fallo modulo SPIFFS");
-      return;
-    }
+    Serial.begin(115200);
+    //Init_SD();
+    Init_Lora();
     
     Wire.begin();
     Wire.setClock(400000);
     Clock.setSquareWave(SquareWaveDisable);
     
-    // Entrada del sensor
+
     pinMode(Sensor,INPUT);
     attachInterrupt(digitalPinToInterrupt(Sensor), contador, RISING);
     interrupts();
     
-    // Entrada del RTC
     pinMode(INT_PIN, INPUT_PULLUP); 
     attachInterrupt(digitalPinToInterrupt(INT_PIN), onAlarm, FALLING);
     
-     pinMode(RELE,OUTPUT); // Activacion del relevador
-     digitalWrite(RELE, HIGH); // Apagamos el relevador
-
-     esp_sleep_enable_ext0_wakeup(GPIO_NUM_15,0);
-     print_wakeup_reason();
-     
-     
+    pinMode(RELE,OUTPUT); 
+    digitalWrite(RELE, HIGH); 
+    Serial.println("Tarjeta encendida");
 }
 
 void loop()
 {
- 
-    
-    if (alarmInterrupt) {
-            Stop_alarm();
-            alarmInterrupt = false; // Reinicializamos la variable de interrupcion 
+  if (alarmInterrupt) {
+    Stop_alarm();
+    alarmInterrupt = false; 
+    enviar_msg("ON");
+    Serial.print("Alarma activada");
             
-            Serial.print("Alarma activada");
-            // Calculo de la hora de apagado de la bomba
-            DateTime hoyy = rtcc.now(); // Fecha actual
-            DateTime pause (hoyy.unixtime()+ tiempo_riego * 60); // Fecha futura
-            // Encendido del motor
-            digitalWrite(RELE,LOW);
-            int count = 0;
-            while(true){
-              DateTime hoy = rtcc.now();
-              if(hoy.hour() == pause.hour() && hoy.minute()==pause.minute()){
-                break;
-              }
-              Medir();// Medicion del sensor
+    DateTime hoyy = rtcc.now(); 
+    DateTime pause (hoyy.unixtime()+ tiempo_riego * 60); 
 
-              if(volumen == 0 && count == 3){
-                Serial.println("Paro de emergencia, Sin circulacion de agua");
-                break;
-              }
-              count++;
-            }
-            Serial.println("El volumen total dezplazado es: ");
-            Serial.println(volumen);
-            Serial.println("Motor apagado");
-            digitalWrite(RELE,HIGH);
+    digitalWrite(RELE,LOW);
+    int count = 0;
+  
+    while(true){
+      DateTime hoy = rtcc.now();
+      if(hoy.hour() == pause.hour() && hoy.minute()==pause.minute()){
+        break;
+      }
+      Medir();
 
-            Lora_sender(volumen,hoyy,pause);
-            volumen = 0;  
-            sleep_start = true;
+      if(volumen == 0 && count == 3){
+        Serial.println("Paro de emergencia, Sin circulacion de agua");
+        break;
+      }
+        count++;
+      }
+    Serial.println("El volumen total dezplazado es: ");
+    Serial.println(volumen);
+    Serial.println("Motor apagado");
+    digitalWrite(RELE,HIGH);
+    Lora_sender(volumen,hoyy,pause);
+    volumen = 0;  
+    Activate_alarm();
+    delay(30);
+    enviar_msg("OFF");
             
     }
-    if(sleep_start){
-      Serial.println("Sueño iniciado");
-      Activate_alarm(true);
-      esp_deep_sleep_start();
-    }
+  packetSize = LoRa.parsePacket();
+  if (packetSize) { recibe_msg(packetSize);  }
+
 }
