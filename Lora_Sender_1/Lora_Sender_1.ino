@@ -30,13 +30,17 @@ RTC_DS3231 rtcc;
 #define LORA_RST     23   // GPIO14 -- SX1278's RESET
 #define LORA_IRQ     26   // GPIO26 -- SX1278's IRQ(Interrupt Request)
 
+bool start = false;
+bool stopp = false;
+
 volatile bool alarmInterrupt = false; 
 volatile int count = 0; 
 
 bool sleep_start = true;
 
 const int T_Muestreo = 3000; 
-const int tiempo_riego = 1;  
+int tiempo_riego = 1;  
+
 volatile int packetSize;
 
 bool alarm_especifica = false; 
@@ -47,7 +51,7 @@ const int alarma1[] = {11,
 
 bool alarm_periodica = true; 
 int rows; 
-int alarms[50][3];
+int alarms[50][4];
 
 const float K = 6.997; 
 float volumen = 0; 
@@ -94,7 +98,7 @@ void setAlarm2()
               alarms[index_alarm][2]); 
 
   Clock.alarmInterruptEnable(Alarm2, true);
-    
+  tiempo_riego = alarms[index_alarm][3];
 }
 
 void setAlarm1()
@@ -111,7 +115,7 @@ void setAlarm1()
 }
 
 
-void Lora_sender(float mensaje,DateTime start,DateTime Stop)
+void Lora_sender(float mensaje,DateTime start)
 {
   Serial.print("Mensaje enviado");
   LoRa.beginPacket();
@@ -146,6 +150,7 @@ float Frecuencia()
 
 void Medir( )
 {
+
   float caudal = Frecuencia() / K ; 
   In_volumen(caudal); 
 
@@ -201,6 +206,13 @@ void recibe_msg(int packetSize){
   if(packet == "LeerAlarm"){
     enviar_msg("En proceso");
   }
+  else if(packet == "ON"){
+    start = true;
+  }
+  else if(packet == "OF"){
+    stopp = true;
+    start = false;
+  }
   else if(packet != "ON" || packet != "OFF"){
     if(last_caracter == "A"){
       String var_tem = s.separa(packet,',',0);
@@ -209,15 +221,21 @@ void recibe_msg(int packetSize){
       for(int i = 1; i <= rows; i++){
         String var_tem = s.separa(packet,',',i);
         String tiem_tem = s.separa(packet,',',i + rows);
+        String riego = s.separa(packet,',',i + rows*2);
         String H = s.separa(tiem_tem,':',0);
         String M = s.separa(tiem_tem,':',1);
+        
+        String m = s.separa(riego,'.',1);
+        String h = s.separa(riego,'.',0);
 
         alarms[check][0] = var_tem.toInt();
         alarms[check][1] = H.toInt();
         alarms[check][2] = M.toInt();
+        alarms[check][3] = h.toInt() * 60 + m.toInt();
         Serial.print(alarms[check][0]);
         Serial.print(alarms[check][1]);
         Serial.print(alarms[check][2]);
+        Serial.print(alarms[check][3]);
         check++;
       }
     
@@ -290,7 +308,7 @@ void loop()
     DateTime pause (hoyy.unixtime()+ tiempo_riego * 60); 
 
     digitalWrite(RELE,LOW);
-    int count = 0;
+    int cont = 0;
   
     while(true){
       DateTime hoy = rtcc.now();
@@ -299,24 +317,57 @@ void loop()
       }
       Medir();
 
-      if(volumen == 0 && count == 3){
+      if(volumen == 0 && cont == 3*1000){
         Serial.println("Paro de emergencia, Sin circulacion de agua");
         break;
       }
-        count++;
+        cont++;
       }
     Serial.println("El volumen total dezplazado es: ");
     Serial.println(volumen);
     Serial.println("Motor apagado");
     digitalWrite(RELE,HIGH);
-    Lora_sender(volumen,hoyy,pause);
+    Lora_sender(volumen,hoyy);
     volumen = 0;  
     Activate_alarm();
     delay(30);
     enviar_msg("OFF");
             
     }
+    if(start){
+        DateTime hoyy = rtcc.now();
+        enviar_msg("ON");
+        Serial.print("Encendido manual");
+        digitalWrite(RELE,LOW);
+        count = 0;
+        long tiem_fre = millis() + T_Muestreo;
+        while(true){
+          if(stopp){
+            break;
+          }
+         if(millis() < tiem_fre){
+           In_volumen(((float)count * 1000 / T_Muestreo)/K);
+           tiem_fre = millis() + T_Muestreo;
+           count = 0;
+         }
+         packetSize = LoRa.parsePacket();
+         if (packetSize) { recibe_msg(packetSize);}
+          
+         count++;
+        }
+      Serial.println("El volumen total dezplazado es: ");
+      Serial.println(volumen);
+      Serial.println("Motor apagado");
+      digitalWrite(RELE,HIGH);
+      Lora_sender(volumen,hoyy);
+      volumen = 0;  
+    
+      delay(30);
+      enviar_msg("OFF");
+      stopp = false;
+    }
+    
   packetSize = LoRa.parsePacket();
-  if (packetSize) { recibe_msg(packetSize);  }
+  if (packetSize) { recibe_msg(packetSize);}
 
 }
